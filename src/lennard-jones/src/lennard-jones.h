@@ -19,7 +19,11 @@ extern "C" {
 #define FRAME_DELAY 3
 #define GIF_FILE "simulation.gif"
 
-
+// Device type enum
+typedef enum {
+    CPU = 0,
+    GPU = 1
+} Device;
 
 typedef struct {
     double x;
@@ -57,12 +61,23 @@ double compute_forces(
     unsigned int n,
     double box_size
 );
+double compute_forces_gpu(
+    Particle *particles,
+    unsigned int n,
+    double box_size
+);
 double leapfrog_step(
     Particle *particles,
     unsigned int n,
     double box_size
 );
+double leapfrog_step_gpu(
+    Particle *particles,
+    unsigned int n,
+    double box_size
+);
 SimulationResult run_simulation(Particle *particles, unsigned int n, unsigned int nsteps, double box_size, int log_steps);
+SimulationResult run_simulation_device(Particle *particles, unsigned int n, unsigned int nsteps, double box_size, int log_steps, Device device);
 
 #ifdef __cplusplus
 }

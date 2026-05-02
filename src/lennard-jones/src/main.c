@@ -1,12 +1,14 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <omp.h>
 
 #include "lennard-jones.h"
 
 void print_help(const char *exe) {
-    printf("Usage: %s [N] [nsteps]\n", exe);
+    printf("Usage: %s [N] [nsteps] [device]\n", exe);
+    printf("  device: 'cpu' for CPU execution (default), 'gpu' for GPU execution\n", exe);
 }
 
 int main(int argc, char **argv) {
@@ -16,6 +18,7 @@ int main(int argc, char **argv) {
     double density = 0.95;
     double temperature = 0.5;
     unsigned int seed = 42;
+    Device device = CPU;  // default to CPU
     
     Particle *particles = NULL;
     SimulationResult result;
@@ -28,6 +31,18 @@ int main(int argc, char **argv) {
         nsteps = (unsigned int)strtoul(argv[2], NULL, 10);
     }
     if (argc > 3) {
+        if (strcmp(argv[3], "gpu") == 0) {
+            device = GPU;
+            printf("Using GPU for simulation\n");
+        } else if (strcmp(argv[3], "cpu") == 0) {
+            device = CPU;
+            printf("Using CPU for simulation\n");
+        } else {
+            print_help(argv[0]);
+            return 1;
+        }
+    }
+    if (argc > 4) {
         print_help(argv[0]);
         return 1;
     }
@@ -59,7 +74,7 @@ int main(int argc, char **argv) {
 
     //run simulation and measure time
     double start = omp_get_wtime();
-    result = run_simulation(particles, n, nsteps, box_size, 1);
+    result = run_simulation_device(particles, n, nsteps, box_size, 1, device);
     double stop = omp_get_wtime();
     printf("\nFinished simulation.\n");
     printf("Final KE: %10.4f | delta: %+.4f\n", result.final_kinetic, result.final_kinetic - result.start_kinetic);
