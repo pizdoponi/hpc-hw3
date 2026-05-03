@@ -1,0 +1,13 @@
+==========================================
+GPU Benchmark: Particles=4000, Steps=5000
+==========================================
+Start time: Sun May  3 08:41:34 PM CEST 2026
+
+Run 1/5 -> benchmark-results/gpu/particles_4000/run_1.log
+Run 2/5 -> benchmark-results/gpu/particles_4000/run_2.log
+Run 3/5 -> benchmark-results/gpu/particles_4000/run_3.log
+Run 4/5 -> benchmark-results/gpu/particles_4000/run_4.log
+Run 5/5 -> benchmark-results/gpu/particles_4000/run_5.log
+
+End time: Sun May  3 08:42:32 PM CEST 2026
+Logs saved to: benchmark-results/gpu/particles_4000
