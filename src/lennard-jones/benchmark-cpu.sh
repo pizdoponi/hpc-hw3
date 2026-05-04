@@ -1,11 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
-
-EXE="${EXE:-$SCRIPT_DIR/lj.out}"
-RESULT_ROOT="${1:-${RESULT_ROOT:-$SCRIPT_DIR/results/$(date +%Y%m%d_%H%M%S)}}"
+PROJECT_DIR="$(pwd)"
+EXE="./lj.out"
+RESULT_ROOT="${1:-${RESULT_ROOT:-$PROJECT_DIR/results/$(date +%Y%m%d_%H%M%S)}}"
 STEPS="${STEPS:-5000}"
 REPEATS="${REPEATS:-5}"
 REPEATS_8000="${REPEATS_8000:-$REPEATS}"
@@ -18,18 +16,6 @@ if [[ ! -x "$EXE" ]]; then
 fi
 
 IFS=' ' read -r -a PARTICLE_COUNTS <<< "$PARTICLE_COUNTS_STR"
-RUNNER="${RUNNER:-}"
-if [[ -z "$RUNNER" && -n "${SLURM_JOB_ID:-}" ]]; then
-    RUNNER="srun"
-fi
-
-run_cmd() {
-    if [[ -n "$RUNNER" ]]; then
-        "$RUNNER" "$@"
-    else
-        "$@"
-    fi
-}
 
 repeats_for_particle() {
     local particles="$1"
@@ -56,7 +42,7 @@ for particles in "${PARTICLE_COUNTS[@]}"; do
     for run in $(seq 1 "$runs"); do
         run_log="$run_dir/run_$(printf '%02d' "$run").log"
         echo "[$(date '+%F %T')] CPU run $run/$runs -> $run_log"
-        run_cmd "$EXE" \
+        "$EXE" \
             --particles "$particles" \
             --steps "$STEPS" \
             --device cpu \

@@ -1,11 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
-
-EXE="${EXE:-$SCRIPT_DIR/lj.out}"
-RESULT_ROOT="${1:-${RESULT_ROOT:-$SCRIPT_DIR/results/$(date +%Y%m%d_%H%M%S)}}"
+PROJECT_DIR="$(pwd)"
+EXE="./lj.out"
+RESULT_ROOT="${1:-${RESULT_ROOT:-$PROJECT_DIR/results/$(date +%Y%m%d_%H%M%S)}}"
 BLOCK_SIZES_STR="${BLOCK_SIZES:-64 128 256 512}"
 STEPS="${STEPS:-5000}"
 REPEATS="${REPEATS:-5}"
@@ -18,20 +16,10 @@ if [[ ! -x "$EXE" ]]; then
     exit 1
 fi
 
+module load CUDA
+
 IFS=' ' read -r -a BLOCK_SIZES <<< "$BLOCK_SIZES_STR"
 IFS=' ' read -r -a PARTICLE_COUNTS <<< "$PARTICLE_COUNTS_STR"
-RUNNER="${RUNNER:-}"
-if [[ -z "$RUNNER" && -n "${SLURM_JOB_ID:-}" ]]; then
-    RUNNER="srun"
-fi
-
-run_cmd() {
-    if [[ -n "$RUNNER" ]]; then
-        "$RUNNER" "$@"
-    else
-        "$@"
-    fi
-}
 
 repeats_for_particle() {
     local particles="$1"
@@ -60,7 +48,7 @@ for block_size in "${BLOCK_SIZES[@]}"; do
         for run in $(seq 1 "$runs"); do
             run_log="$run_dir/run_$(printf '%02d' "$run").log"
             echo "[$(date '+%F %T')] block=$block_size particles=$particles run $run/$runs -> $run_log"
-            run_cmd "$EXE" \
+            srun "$EXE" \
                 --particles "$particles" \
                 --steps "$STEPS" \
                 --device gpu \

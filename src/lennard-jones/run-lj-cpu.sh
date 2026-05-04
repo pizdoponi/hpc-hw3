@@ -10,12 +10,12 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
-
-if type module >/dev/null 2>&1; then
-    module load CUDA || true
+if [[ ! -f Makefile ]]; then
+    echo "Error: run-lj-cpu.sh must be run from src/lennard-jones" >&2
+    exit 1
 fi
+
+module load CUDA
 
 PARTICLES="${PARTICLES:-1000}"
 STEPS="${STEPS:-1000}"
