@@ -1,41 +1,72 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 
-#SBATCH --partition=gpu
-#SBATCH --job-name=lj-benchmark-gpu
-#SBATCH --ntasks=1
-#SBATCH --cpus-per-task=1
-#SBATCH --gpus=1
-#SBATCH --nodes=1
-#SBATCH --output=benchmark_gpu_%a.log
-#SBATCH --array=0-3
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
 
-RESULT_ROOT="benchmark-results"
-REPEATS=5
-EXE=lj.out
+EXE="${EXE:-$SCRIPT_DIR/lj.out}"
+RESULT_ROOT="${1:-${RESULT_ROOT:-$SCRIPT_DIR/results/$(date +%Y%m%d_%H%M%S)}}"
+GPU_BLOCK_SIZE="${2:-${GPU_BLOCK_SIZE:-256}}"
+STEPS="${STEPS:-5000}"
+REPEATS="${REPEATS:-5}"
+REPEATS_8000="${REPEATS_8000:-$REPEATS}"
+PARTICLE_COUNTS_STR="${PARTICLE_COUNTS:-1000 2000 4000 8000}"
 
-# Load CUDA
-module load CUDA
+if [[ ! -x "$EXE" ]]; then
+    echo "Executable not found: $EXE" >&2
+    echo "Build first with: make" >&2
+    exit 1
+fi
 
-# Map array index to particle count
-PARTICLE_COUNTS=(1000 2000 4000 8000)
-PARTICLES=${PARTICLE_COUNTS[$SLURM_ARRAY_TASK_ID]}
-STEPS=5000
+IFS=' ' read -r -a PARTICLE_COUNTS <<< "$PARTICLE_COUNTS_STR"
+RUNNER="${RUNNER:-}"
+if [[ -z "$RUNNER" && -n "${SLURM_JOB_ID:-}" ]]; then
+    RUNNER="srun"
+fi
 
-RUN_DIR="$RESULT_ROOT/gpu/particles_${PARTICLES}"
-mkdir -p "$RUN_DIR"
+run_cmd() {
+    if [[ -n "$RUNNER" ]]; then
+        "$RUNNER" "$@"
+    else
+        "$@"
+    fi
+}
 
-echo "=========================================="
-echo "GPU Benchmark: Particles=$PARTICLES, Steps=$STEPS"
-echo "=========================================="
-echo "Start time: $(date)"
-echo ""
+repeats_for_particle() {
+    local particles="$1"
+    if [[ "$particles" == "8000" ]]; then
+        echo "$REPEATS_8000"
+    else
+        echo "$REPEATS"
+    fi
+}
 
-for RUN in $(seq 1 $REPEATS); do
-    RUN_LOG="$RUN_DIR/run_${RUN}.log"
-    echo "Run $RUN/$REPEATS -> $RUN_LOG"
-    srun ./$EXE $PARTICLES $STEPS gpu > "$RUN_LOG" 2>&1
+mkdir -p "$RESULT_ROOT/basic/gpu/block_${GPU_BLOCK_SIZE}"
+
+echo "GPU benchmark result root: $RESULT_ROOT"
+echo "GPU benchmark particle counts: ${PARTICLE_COUNTS[*]}"
+echo "GPU benchmark steps: $STEPS"
+echo "GPU benchmark block size: $GPU_BLOCK_SIZE"
+echo "GPU benchmark repeats: $REPEATS (8000 -> $REPEATS_8000)"
+
+for particles in "${PARTICLE_COUNTS[@]}"; do
+    runs="$(repeats_for_particle "$particles")"
+    run_dir="$RESULT_ROOT/basic/gpu/block_${GPU_BLOCK_SIZE}/particles_${particles}"
+    mkdir -p "$run_dir"
+
+    echo "--- GPU benchmark: particles=$particles steps=$STEPS block_size=$GPU_BLOCK_SIZE runs=$runs ---"
+    for run in $(seq 1 "$runs"); do
+        run_log="$run_dir/run_$(printf '%02d' "$run").log"
+        echo "[$(date '+%F %T')] GPU run $run/$runs -> $run_log"
+        run_cmd "$EXE" \
+            --particles "$particles" \
+            --steps "$STEPS" \
+            --device gpu \
+            --block-size "$GPU_BLOCK_SIZE" \
+            > "$run_log" 2>&1
+    done
+    echo
+
 done
 
-echo ""
-echo "End time: $(date)"
-echo "Logs saved to: $RUN_DIR"
+echo "GPU benchmarks saved to $RESULT_ROOT/basic/gpu/block_${GPU_BLOCK_SIZE}"

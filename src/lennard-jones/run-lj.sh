@@ -7,14 +7,38 @@
 #SBATCH --cpus-per-task=1
 #SBATCH --gpus=1
 #SBATCH --nodes=1
-#SBATCH --output=lj_out.log
+#SBATCH --time=02:00:00
+#SBATCH --output=slurm-%x-%j.out
 
-#LOAD MODULES 
-module load CUDA
+set -euo pipefail
 
-#BUILD
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
+if type module >/dev/null 2>&1; then
+    module load CUDA || true
+fi
+
+PARTICLES="${PARTICLES:-1000}"
+STEPS="${STEPS:-1000}"
+DEVICE="${DEVICE:-gpu}"
+GPU_BLOCK_SIZE="${GPU_BLOCK_SIZE:-256}"
+LOG_ENERGIES="${LOG_ENERGIES:-0}"
+SAVE_FINAL_STATE="${SAVE_FINAL_STATE:-}"
+
+make clean
 make
 
-#RUN
-srun ./lj.out
+CMD=(./lj.out --particles "$PARTICLES" --steps "$STEPS" --device "$DEVICE" --block-size "$GPU_BLOCK_SIZE")
 
+if [[ "$LOG_ENERGIES" == "1" ]]; then
+    CMD+=(--log-energies)
+fi
+
+if [[ -n "$SAVE_FINAL_STATE" ]]; then
+    mkdir -p "$(dirname "$SAVE_FINAL_STATE")"
+    CMD+=(--save-final-state "$SAVE_FINAL_STATE")
+fi
+
+echo "Running: ${CMD[*]}"
+srun "${CMD[@]}"

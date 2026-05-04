@@ -1,9 +1,10 @@
 # Compiler
-CC = nvcc
+CC ?= nvcc
 
 # Compiler flags
-LDLIBS = -lm
-CFLAGS = -Wno-deprecated-gpu-targets -gencode=arch=compute_70,code=sm_70 -O3 -Xcompiler --openmp,-Wall
+CPPFLAGS ?=
+LDLIBS ?= -lm
+CFLAGS ?= -Wno-deprecated-gpu-targets -gencode=arch=compute_70,code=sm_70 -O3 -Xcompiler --openmp,-Wall
 
 SRC=src
 
@@ -19,18 +20,21 @@ OBJS_1 = $(SRCS:$(SRC)/%.c=%.o)
 OBJS = $(OBJS_1:$(SRC)/%.cu=%.o)
 
 # Executable name
-TARGET = lj.out
+TARGET ?= lj.out
 
 # Build target
 $(TARGET): $(OBJS)
-	$(CC) $(CFLAGS) $(OBJS) -o $(TARGET) $(LDLIBS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(OBJS) -o $(TARGET) $(LDLIBS)
 
 # Compile source files to object files
 %.o: $(SRC)/%.cu $(HDRS)
-	$(CC) $(CFLAGS) -c -o $@ $<
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ $<
 
 %.o: $(SRC)/%.c $(HDRS)
-	$(CC) $(CFLAGS) -c -o $@ $<
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ $<
+
+.PHONY: clean
+
 # Clean
 clean:
 	rm -f $(OBJS) $(TARGET)

@@ -11,13 +11,41 @@ extern "C" {
 #define R_CUT 2.5
 #define JITTER 0.05
 
+#ifndef GENERATE_GIF
 #define GENERATE_GIF 0
+#endif
+
+#ifndef FRAME_WIDTH
 #define FRAME_WIDTH 800
+#endif
+
+#ifndef FRAME_HEIGHT
 #define FRAME_HEIGHT 800
+#endif
+
+#ifndef FRAME_EVERY
 #define FRAME_EVERY 5
+#endif
+
+#ifndef FRAME_PARTICLE_RADIUS
 #define FRAME_PARTICLE_RADIUS 2
+#endif
+
+#ifndef FRAME_DELAY
 #define FRAME_DELAY 3
+#endif
+
+#ifndef GIF_FILE
 #define GIF_FILE "simulation.gif"
+#endif
+
+#ifndef DEFAULT_GPU_BLOCK_SIZE
+#define DEFAULT_GPU_BLOCK_SIZE 256
+#endif
+
+#ifndef MAX_GPU_BLOCK_SIZE
+#define MAX_GPU_BLOCK_SIZE 1024
+#endif
 
 // Device type enum
 typedef enum {
@@ -78,6 +106,8 @@ double leapfrog_step_gpu(
 );
 SimulationResult run_simulation(Particle *particles, unsigned int n, unsigned int nsteps, double box_size, int log_steps);
 SimulationResult run_simulation_device(Particle *particles, unsigned int n, unsigned int nsteps, double box_size, int log_steps, Device device);
+void set_gpu_block_size(unsigned int block_size);
+unsigned int get_gpu_block_size(void);
 
 #ifdef __cplusplus
 }

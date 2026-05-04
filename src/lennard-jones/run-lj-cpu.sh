@@ -3,16 +3,39 @@
 #SBATCH --reservation=fri
 #SBATCH --job-name=lennard-jones-cpu
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=8
+#SBATCH --cpus-per-task=1
 #SBATCH --nodes=1
-#SBATCH --output=lj_cpu_out.log
+#SBATCH --time=02:00:00
+#SBATCH --output=slurm-%x-%j.out
 
+set -euo pipefail
 
-EXE=lj.out
-if [ ! -x "$EXE" ]; then
-	echo "Error: $EXE not found or not executable. Build it on a GPU node before submitting this CPU job." >&2
-	exit 1
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
+if type module >/dev/null 2>&1; then
+    module load CUDA || true
 fi
 
-echo "Running Lennard-Jones simulation on CPU..."
-./$EXE 1000 1000 cpu
+PARTICLES="${PARTICLES:-1000}"
+STEPS="${STEPS:-1000}"
+GPU_BLOCK_SIZE="${GPU_BLOCK_SIZE:-256}"
+LOG_ENERGIES="${LOG_ENERGIES:-0}"
+SAVE_FINAL_STATE="${SAVE_FINAL_STATE:-}"
+
+make clean
+make
+
+CMD=(./lj.out --particles "$PARTICLES" --steps "$STEPS" --device cpu --block-size "$GPU_BLOCK_SIZE")
+
+if [[ "$LOG_ENERGIES" == "1" ]]; then
+    CMD+=(--log-energies)
+fi
+
+if [[ -n "$SAVE_FINAL_STATE" ]]; then
+    mkdir -p "$(dirname "$SAVE_FINAL_STATE")"
+    CMD+=(--save-final-state "$SAVE_FINAL_STATE")
+fi
+
+echo "Running: ${CMD[*]}"
+"${CMD[@]}"

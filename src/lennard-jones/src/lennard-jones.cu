@@ -23,6 +23,16 @@ static inline void _checkCudaErrors(cudaError_t err, const char *expr, const cha
 #include "gifenc.h"
 #include "lennard-jones.h"
 
+static unsigned int g_gpu_block_size = DEFAULT_GPU_BLOCK_SIZE;
+
+void set_gpu_block_size(unsigned int block_size) {
+    g_gpu_block_size = block_size;
+}
+
+unsigned int get_gpu_block_size(void) {
+    return g_gpu_block_size;
+}
+
 // Device type is declared in lennard-jones.h; do not redeclare here.
 
 // plotting functions
@@ -219,6 +229,17 @@ __global__ void leapfrog_step_cuda_kernel(Particle *particles, unsigned int n, d
     p->y = wrap_coordinate(p->y, box_size);
 }
 
+__global__ void complete_velocity_cuda_kernel(Particle *particles, unsigned int n)
+{
+    unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (i >= n) return;
+
+    Particle *p = &particles[i];
+    p->vx += 0.5 * DT * p->fx;
+    p->vy += 0.5 * DT * p->fy;
+}
+
 // CUDA kernel for computing forces on GPU
 __global__ void compute_forces_cuda_kernel(
     Particle *particles,
@@ -268,13 +289,31 @@ __global__ void compute_forces_cuda_kernel(
 // Wrapper function for GPU force computation that operates on device-resident particles
 static void compute_forces_gpu_device(Particle *d_particles, unsigned int n, double box_size, double *d_pe_total) {
     double v_shift = compute_v_shift();
+    unsigned int block_size = get_gpu_block_size();
+    unsigned int grid_size = (n + block_size - 1) / block_size;
 
     checkCudaErrors(cudaMemset(d_pe_total, 0, sizeof(double)));
-
-    unsigned int block_size = 256;
-    unsigned int grid_size = (n + block_size - 1) / block_size;
     compute_forces_cuda_kernel<<<grid_size, block_size>>>(d_particles, n, box_size, v_shift, d_pe_total);
     checkCudaErrors(cudaGetLastError());
+}
+
+double compute_forces_gpu(Particle *particles, unsigned int n, double box_size) {
+    Particle *d_particles = NULL;
+    double *d_pe_total = NULL;
+    double pe = 0.0;
+
+    checkCudaErrors(cudaMalloc((void**)&d_particles, n * sizeof(Particle)));
+    checkCudaErrors(cudaMalloc((void**)&d_pe_total, sizeof(double)));
+    checkCudaErrors(cudaMemcpy(d_particles, particles, n * sizeof(Particle), cudaMemcpyHostToDevice));
+
+    compute_forces_gpu_device(d_particles, n, box_size, d_pe_total);
+    checkCudaErrors(cudaDeviceSynchronize());
+    checkCudaErrors(cudaMemcpy(&pe, d_pe_total, sizeof(double), cudaMemcpyDeviceToHost));
+    checkCudaErrors(cudaMemcpy(particles, d_particles, n * sizeof(Particle), cudaMemcpyDeviceToHost));
+
+    checkCudaErrors(cudaFree(d_particles));
+    checkCudaErrors(cudaFree(d_pe_total));
+    return pe;
 }
 
 double leapfrog_step(Particle *particles, unsigned int n, double box_size) {
@@ -307,22 +346,25 @@ double leapfrog_step_gpu(Particle *particles, unsigned int n, double box_size) {
     Particle *d_particles = NULL;
     double *d_pe_total = NULL;
     double pe = 0.0;
+    unsigned int block_size = get_gpu_block_size();
+    unsigned int grid_size = (n + block_size - 1) / block_size;
 
     checkCudaErrors(cudaMalloc((void**)&d_particles, n * sizeof(Particle)));
     checkCudaErrors(cudaMalloc((void**)&d_pe_total, sizeof(double)));
     checkCudaErrors(cudaMemcpy(d_particles, particles, n * sizeof(Particle), cudaMemcpyHostToDevice));
 
-    unsigned int block_size = 256;
-    unsigned int grid_size = (n + block_size - 1) / block_size;
-
     leapfrog_step_cuda_kernel<<<grid_size, block_size>>>(d_particles, n, box_size);
     checkCudaErrors(cudaGetLastError());
 
     compute_forces_gpu_device(d_particles, n, box_size, d_pe_total);
+
+    complete_velocity_cuda_kernel<<<grid_size, block_size>>>(d_particles, n);
+    checkCudaErrors(cudaGetLastError());
+
     checkCudaErrors(cudaDeviceSynchronize());
     checkCudaErrors(cudaMemcpy(&pe, d_pe_total, sizeof(double), cudaMemcpyDeviceToHost));
-
     checkCudaErrors(cudaMemcpy(particles, d_particles, n * sizeof(Particle), cudaMemcpyDeviceToHost));
+
     checkCudaErrors(cudaFree(d_particles));
     checkCudaErrors(cudaFree(d_pe_total));
     return pe;
@@ -340,6 +382,8 @@ SimulationResult run_simulation_device(Particle *particles, unsigned int n, unsi
         Particle *d_particles = NULL;
         double *d_pe_total = NULL;
         double start_kinetic = compute_ke(particles, n);
+        unsigned int block_size = get_gpu_block_size();
+        unsigned int grid_size = (n + block_size - 1) / block_size;
 
         checkCudaErrors(cudaMalloc((void**)&d_particles, n * sizeof(Particle)));
         checkCudaErrors(cudaMalloc((void**)&d_pe_total, sizeof(double)));
@@ -351,21 +395,21 @@ SimulationResult run_simulation_device(Particle *particles, unsigned int n, unsi
 
         out.start_kinetic = start_kinetic;
         out.start_total = out.start_kinetic + out.start_potential;
-    out.final_kinetic = out.start_kinetic;
-    out.final_potential = out.start_potential;
-    out.final_total = out.start_total;
+        out.final_kinetic = out.start_kinetic;
+        out.final_potential = out.start_potential;
+        out.final_total = out.start_total;
 
         for (unsigned int step = 0; step < nsteps; step++) {
-            unsigned int block_size = 256;
-            unsigned int grid_size = (n + block_size - 1) / block_size;
-
             leapfrog_step_cuda_kernel<<<grid_size, block_size>>>(d_particles, n, box_size);
             checkCudaErrors(cudaGetLastError());
 
             compute_forces_gpu_device(d_particles, n, box_size, d_pe_total);
-            checkCudaErrors(cudaDeviceSynchronize());
+
+            complete_velocity_cuda_kernel<<<grid_size, block_size>>>(d_particles, n);
+            checkCudaErrors(cudaGetLastError());
 
             if (log_steps) {
+                checkCudaErrors(cudaDeviceSynchronize());
                 checkCudaErrors(cudaMemcpy(&out.final_potential, d_pe_total, sizeof(double), cudaMemcpyDeviceToHost));
                 checkCudaErrors(cudaMemcpy(particles, d_particles, n * sizeof(Particle), cudaMemcpyDeviceToHost));
                 out.final_kinetic = compute_ke(particles, n);
@@ -380,8 +424,8 @@ SimulationResult run_simulation_device(Particle *particles, unsigned int n, unsi
             }
         }
 
+        checkCudaErrors(cudaDeviceSynchronize());
         checkCudaErrors(cudaMemcpy(&out.final_potential, d_pe_total, sizeof(double), cudaMemcpyDeviceToHost));
-
         checkCudaErrors(cudaMemcpy(particles, d_particles, n * sizeof(Particle), cudaMemcpyDeviceToHost));
         out.final_kinetic = compute_ke(particles, n);
         out.final_total = out.final_kinetic + out.final_potential;
@@ -436,8 +480,8 @@ SimulationResult run_simulation_device(Particle *particles, unsigned int n, unsi
         if (gif) {
             ge_close_gif(gif);
         }
-    }
 #endif
+    }
 
     out.n = n;
     out.particles = particles;
