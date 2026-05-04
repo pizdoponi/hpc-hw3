@@ -1,0 +1,3 @@
+CUDA error at src/lennard-jones.cu:388: CUDA driver version is insufficient for CUDA runtime version (expr: cudaMalloc((void**)&d_particles, n * sizeof(Particle)))
+CONFIG particles=1000 steps=5000 device=gpu density=0.950000 temperature=0.500000 seed=42 log_energies=0 gpu_block_size=128 box_size=44.000000
+srun: error: wn163: task 0: Exited with exit code 1

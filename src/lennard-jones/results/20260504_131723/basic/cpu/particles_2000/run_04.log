@@ -1,0 +1,8 @@
+CONFIG particles=2000 steps=5000 device=cpu density=0.950000 temperature=0.500000 seed=42 log_energies=0 gpu_block_size=256 box_size=61.333333
+
+Finished simulation.
+Final KE:  1995.5621 | delta: +995.5621
+Final PE: -3205.3740 | delta: -995.6517
+Final E:  -1209.8119 | delta: -0.0896
+Simulation time 5000 steps: 113.462343 seconds
+RESULT device=cpu particles=2000 steps=5000 density=0.950000 temperature=0.500000 seed=42 log_energies=0 gpu_block_size=256 box_size=61.333333 time_seconds=113.462343 start_ke=1000.0000000000 start_pe=-2209.7222426854 start_total=-1209.7222426854 final_ke=1995.5621264373 final_pe=-3205.3739858903 final_total=-1209.8118594531 delta_total=-0.0896167676 final_state=-
