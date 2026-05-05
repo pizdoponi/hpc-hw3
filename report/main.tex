@@ -1,0 +1,60 @@
+\documentclass[10pt,a4paper]{article}
+\usepackage[margin=2cm]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{caption}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\input{generated/report_values.tex}
+
+\title{Lennard--Jones CUDA benchmark report}
+\author{Nejc Krajšek, Rok Mušič}
+\date{May 2026}
+
+\begin{document}
+\maketitle
+\vspace{-1.5em}
+
+We benchmarked the final code on 5000 simulation steps for $N=1000, 2000, 4000$ and $8000$ particles. The block-size sweep used GPU block sizes 64, 128, 256, 512 and 1024. For the final CPU vs GPU comparison we used block size \BestBlockSize, because it was the fastest choice in every tested case. We implemented all the requirements for the basic grades, but none of the optional ones for a higher grade.
+
+\paragraph{Block-size sweep.}
+Table~\ref{tab:block} shows the mean GPU time for each tested block size. We found out that block size \BestBlockSize is the best choice for all four particle counts. Block size 64 is very close, which means that the kernel already has enough parallel work in that range. From block size 256 onward the runtime gets worse, and at 1024 it gets much worse. We interpret this as a simple balance issue: very large blocks give each launch less flexibility, so the GPU has a harder time keeping enough useful work active at the same time. For 8000 particles, we ran only one measurement for each block size, and 128 was still the fastest choice.
+
+\begin{table}[h]
+    \centering
+    \caption{Mean GPU runtime [s] for the block-size sweep at 5000 steps. Best time in each row is bold.}
+    \label{tab:block}
+    \small
+    \input{generated/table_block_sweep.tex}
+\end{table}
+
+\paragraph{Final timing results and speed-up.}
+Table~\ref{tab:basic} gives the final CPU and GPU timings and the resulting speed-up. We found out that the GPU is already faster at $N=1000$ by $11.49\times$, and that the advantage grows strongly with problem size, reaching $103.80\times$ at $N=8000$. This trend is stable across the whole range: every time we doubled $N$, the CPU time increased by about \CpuDoublingMin{}--\CpuDoublingMax$\times$, while the GPU time increased by only about \GpuDoublingMin{}--\GpuDoublingMax$\times$. As a result, the speed-up itself increased by about \SpeedupDoublingMin{}--\SpeedupDoublingMax$\times$ for each doubling of $N$.
+
+\begin{table}[h]
+    \centering
+    \caption{Final benchmark results at 5000 steps using GPU block size \BestBlockSize.}
+    \label{tab:basic}
+    \small
+    \input{generated/table_basic_summary.tex}
+\end{table}
+
+Figure~\ref{fig:scaling} shows the same data on a log--log scale together with simple power-law fits. We found out that the CPU measurements follow an empirical trend close to $N^{\CpuFitExponent}$, which matches the expected strong growth of the all-pairs force computation ($O(n^2)$ in theory). The GPU fit is much flatter, about $N^{\GpuFitExponent}$ over the measured range. We do not claim that the true complexity changed; instead, this shows that the GPU overhead is better hidden as the problem gets larger (a similar trend to what we observed in the previous homework (a similar trend to what we observed in the previous homework). The speed-up plot on the right confirms the same story in a direct way: larger systems use the GPU more effectively.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.98\linewidth]{figures/scaling_and_speedup.pdf}
+    \caption{Left: measured CPU and GPU scaling with simple empirical power-law fits. Right: speed-up increases steadily with particle count.}
+    \label{fig:scaling}
+\end{figure}
+
+\paragraph{Correctness check.}
+We also checked energy conservation. The mean relative total-energy drift stayed below \MaxRelDrift{} for every reported CPU and GPU case. The absolute drift grows with $N$, but the relative drift stays small and the CPU and GPU values stay close to each other. We therefore found no sign that the CUDA version changes the physical behaviour in a meaningful way over the measured 5000-step runs. As required, we also stored a separate final state visualization outside the report.
+
+\paragraph{Conclusion.}
+We found out that the most important practical choice was the GPU block size, and that 128 threads per block was the best setting in all tested cases. With that choice, the GPU gave a clear speed-up already at 1000 particles and the benefit grew quickly with larger systems. The measured data therefore supports the main conclusion of our work: for this implementation, the GPU version is not only correct, but also much more effective than the CPU baseline once the particle count becomes moderately large.
+
+\end{document}
